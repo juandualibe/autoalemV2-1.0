@@ -61,7 +61,15 @@ app.put('/vehiculos/:id', async (req, res) => {
     if (result.rows.length === 0) return res.status(404).send('Vehículo no encontrado');
     const vehiculo = result.rows[0];
 
-    if ((ubicacion === 'Taller' || ubicacion === 'Chapista') && oldUbicacion !== ubicacion) {
+    // Si la nueva ubicación es "Agencia" y estaba en "Taller" o "Chapista", finalizar revisiones activas
+    if (ubicacion === 'Agencia' && (oldUbicacion === 'Taller' || oldUbicacion === 'Chapista')) {
+      await pool.query(
+        'UPDATE revisiones SET fecha_salida = $1 WHERE id_vehiculo = $2 AND fecha_salida IS NULL',
+        [new Date().toISOString(), id]
+      );
+    }
+    // Si la nueva ubicación es "Taller" o "Chapista" y no lo era antes, crear una revisión
+    else if ((ubicacion === 'Taller' || ubicacion === 'Chapista') && oldUbicacion !== ubicacion) {
       await pool.query(
         'INSERT INTO revisiones (id_vehiculo, tipo, fecha_ingreso, ubicacion, costo) VALUES ($1, $2, $3, $4, $5) RETURNING *',
         [id, 'Revisión inicial', new Date().toISOString(), ubicacion, costo || 0]
