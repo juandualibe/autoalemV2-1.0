@@ -25,13 +25,22 @@ app.get('/vehiculos', async (req, res) => {
 });
 
 app.post('/vehiculos', async (req, res) => {
-  const { marca, modelo, anio, color, estado, propietario, ubicacion, estado_proceso, precio } = req.body;
+  const { marca, modelo, anio, color, estado, propietario, ubicacion, estado_proceso, precio, costo } = req.body;
   try {
     const result = await pool.query(
       'INSERT INTO vehiculos (marca, modelo, anio, color, estado, propietario, ubicacion, estado_proceso, precio) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
       [marca, modelo, anio, color, estado, propietario, ubicacion, estado_proceso, precio]
     );
-    res.json(result.rows[0]);
+    const vehiculo = result.rows[0];
+
+    if (ubicacion === 'Taller' || ubicacion === 'Chapista') {
+      await pool.query(
+        'INSERT INTO revisiones (id_vehiculo, tipo, fecha_ingreso, ubicacion, costo) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+        [vehiculo.id_vehiculo, 'Revisión inicial', new Date().toISOString(), ubicacion, costo || 0]
+      );
+    }
+
+    res.json(vehiculo);
   } catch (err) {
     console.error(err);
     res.status(500).send('Error al agregar vehículo');
@@ -40,14 +49,26 @@ app.post('/vehiculos', async (req, res) => {
 
 app.put('/vehiculos/:id', async (req, res) => {
   const { id } = req.params;
-  const { ubicacion, estado_proceso, vendido } = req.body;
+  const { ubicacion, estado_proceso, vendido, costo } = req.body;
   try {
+    const oldVehiculo = await pool.query('SELECT * FROM vehiculos WHERE id_vehiculo = $1', [id]);
+    const oldUbicacion = oldVehiculo.rows[0].ubicacion;
+
     const result = await pool.query(
       'UPDATE vehiculos SET ubicacion = $1, estado_proceso = $2, vendido = $3 WHERE id_vehiculo = $4 RETURNING *',
       [ubicacion, estado_proceso, vendido, id]
     );
     if (result.rows.length === 0) return res.status(404).send('Vehículo no encontrado');
-    res.json(result.rows[0]);
+    const vehiculo = result.rows[0];
+
+    if ((ubicacion === 'Taller' || ubicacion === 'Chapista') && oldUbicacion !== ubicacion) {
+      await pool.query(
+        'INSERT INTO revisiones (id_vehiculo, tipo, fecha_ingreso, ubicacion, costo) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+        [id, 'Revisión inicial', new Date().toISOString(), ubicacion, costo || 0]
+      );
+    }
+
+    res.json(vehiculo);
   } catch (err) {
     console.error(err);
     res.status(500).send('Error al actualizar vehículo');
@@ -81,12 +102,31 @@ app.post('/revisiones', async (req, res) => {
 
 app.put('/revisiones/:id', async (req, res) => {
   const { id } = req.params;
-  const { fecha_salida } = req.body;
+  const { fecha_salida, nuevaUbicacion, costo } = req.body;
   try {
+    const revision = await pool.query('SELECT * FROM revisiones WHERE id_revision = $1', [id]);
+    const vehiculoId = revision.rows[0].id_vehiculo;
+
     const result = await pool.query(
       'UPDATE revisiones SET fecha_salida = $1 WHERE id_revision = $2 RETURNING *',
       [fecha_salida, id]
     );
+    if (result.rows.length === 0) return res.status(404).send('Revisión no encontrada');
+
+    if (nuevaUbicacion) {
+      const estadoProceso = nuevaUbicacion === 'Agencia' ? 'Listo para entrega' : `En ${nuevaUbicacion.toLowerCase()}`;
+      await pool.query(
+        'UPDATE vehiculos SET ubicacion = $1, estado_proceso = $2 WHERE id_vehiculo = $3 RETURNING *',
+        [nuevaUbicacion, estadoProceso, vehiculoId]
+      );
+      if (nuevaUbicacion === 'Taller' || nuevaUbicacion === 'Chapista') {
+        await pool.query(
+          'INSERT INTO revisiones (id_vehiculo, tipo, fecha_ingreso, ubicacion, costo) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+          [vehiculoId, 'Revisión inicial', new Date().toISOString(), nuevaUbicacion, costo || 0]
+        );
+      }
+    }
+
     res.json(result.rows[0]);
   } catch (err) {
     console.error(err);
@@ -131,7 +171,7 @@ app.delete('/turnos/:id', async (req, res) => {
   }
 });
 
-// Fallback para el frontend (después de todas las rutas de la API)
+// Fallback para el frontend
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'build', 'index.html'));
 });
