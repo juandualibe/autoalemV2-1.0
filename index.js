@@ -115,6 +115,23 @@ app.put('/vehiculos/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Nueva ruta para programar entrega
+app.put('/vehiculos/:id/entrega', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { fecha_entrega } = req.body;
+  try {
+    const result = await pool.query(
+      'UPDATE vehiculos SET fecha_entrega = $1 WHERE id_vehiculo = $2 RETURNING *',
+      [fecha_entrega, id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Vehículo no encontrado' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al programar entrega' });
+  }
+});
+
 app.get('/revisiones', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM revisiones');
