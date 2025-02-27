@@ -31,21 +31,19 @@ const authenticateToken = (req, res, next) => {
 // Ruta de login con bcrypt
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
-  console.log('Intento de login:', { username, password }); // Debug
+  console.log('Intento de login:', { username, password });
   try {
     const result = await pool.query('SELECT * FROM usuarios WHERE username = $1', [username]);
-    console.log('Resultado de la consulta:', result.rows); // Debug
     const user = result.rows[0];
     if (!user) return res.status(400).json({ error: 'Usuario o contraseña incorrectos' });
 
     const validPassword = await bcrypt.compare(password, user.password);
-    console.log('Contraseña válida:', validPassword); // Debug
     if (!validPassword) return res.status(400).json({ error: 'Usuario o contraseña incorrectos' });
 
     const token = jwt.sign({ id: user.id_usuario, username: user.username }, JWT_SECRET, { expiresIn: '1h' });
     res.json({ token });
   } catch (err) {
-    console.error('Error en /login:', err); // Debug detallado
+    console.error('Error en /login:', err);
     res.status(500).json({ error: 'Error en el servidor' });
   }
 });
@@ -211,11 +209,10 @@ app.delete('/turnos/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Servir frontend estático solo si build existe
-const buildPath = path.join(__dirname, 'build');
-app.use(express.static(buildPath));
+// Servir frontend estático desde la carpeta build
+app.use(express.static(path.join(__dirname, 'build')));
 app.get('*', (req, res) => {
-  res.sendFile(path.join(buildPath, 'index.html'), (err) => {
+  res.sendFile(path.join(__dirname, 'build', 'index.html'), (err) => {
     if (err) {
       res.status(500).json({ error: 'Error al servir el frontend' });
     }
@@ -224,5 +221,5 @@ app.get('*', (req, res) => {
 
 // Iniciar servidor
 app.listen(port, () => {
-  console.log(`Servidor corriendo en http://localhost:${port}`);
+  console.log(`Servidor corriendo en el puerto ${port}`);
 });
