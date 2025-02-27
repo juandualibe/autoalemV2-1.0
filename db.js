@@ -7,9 +7,7 @@ const pool = new Pool({
   database: process.env.DB_DATABASE || 'autoalem_y4oq',  // Nombre de la base de datos
   password: process.env.DB_PASSWORD || 'DmtN2NvvZaOgpEcIwq9a8Kq1mBEm16Zy',  // Contraseña de la base de datos
   port: process.env.DB_PORT || 5432,  // Puerto de conexión (5432 es el predeterminado de PostgreSQL)
-  ssl: {
-    rejectUnauthorized: false,  // Desactivar la verificación del certificado (si es necesario)
-  },
+  ssl: process.env.DB_SSL === "true" ? { rejectUnauthorized: false } : false // Usa SSL solo si está habilitado,
 });
 
 module.exports = pool;
