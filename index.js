@@ -96,6 +96,15 @@ app.put('/vehiculos/:id', authenticateToken, async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ error: 'Vehículo no encontrado' });
     const vehiculo = result.rows[0];
 
+    // Si el vehículo se marca como vendido, cerrar revisiones activas
+    if (vendido && !oldVehiculo.rows[0].vendido) {
+      await pool.query(
+        'UPDATE revisiones SET fecha_salida = $1 WHERE id_vehiculo = $2 AND fecha_salida IS NULL',
+        [new Date().toISOString(), id]
+      );
+    }
+
+    // Lógica existente para mover entre ubicaciones
     if (ubicacion === 'Agencia' && (oldUbicacion === 'Taller' || oldUbicacion === 'Chapista')) {
       await pool.query(
         'UPDATE revisiones SET fecha_salida = $1 WHERE id_vehiculo = $2 AND fecha_salida IS NULL',
